@@ -1,9 +1,11 @@
-import { useEffect, useMemo, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { Empty, Field, PageHeader } from '../components/Field'
 import { db, newBase, remove, save, type Category, type Expense } from '../lib/db'
 import { CATEGORIES, FUELS, brl, num, parseNum, today } from '../lib/format'
 import { useDrivers, useExpenses, useVehicles } from '../lib/hooks'
+import Scanner from '../components/Scanner'
+import { consultarNota, nomePorCnpj, notaParaDespesa, parseScan } from '../lib/nfe'
 
 const LAST = 'ultimo-lancamento'
 const getLast = (): { vehicleId?: string; driverId?: string } => {
@@ -27,6 +29,9 @@ export default function ExpenseForm() {
   const [liters, setLiters] = useState('')
   const [price, setPrice] = useState('')
   const [odo, setOdo] = useState('')
+  const [params] = useSearchParams()
+  const [scanning, setScanning] = useState(params.get('scan') === '1')
+  const [lookup, setLookup] = useState<{ state: 'buscando' | 'ok' | 'parcial' | 'erro'; msg: string; aviso?: string; url?: string } | null>(null)
 
   useEffect(() => {
     if (id) {
@@ -60,6 +65,80 @@ export default function ExpenseForm() {
     const prev = all.filter((x) => x.vehicleId === e.vehicleId && x.id !== e.id && x.odometer && x.date <= e.date)
     return Math.max(vehicle?.initialOdometer ?? 0, ...prev.map((x) => x.odometer!)) || undefined
   }, [all, e, vehicle])
+
+  const onScan = useCallback(
+    async (text: string) => {
+      setScanning(false)
+      const sc = parseScan(text)
+      if (!sc) {
+        setLookup({ state: 'erro', msg: 'Esse código não parece ser de uma nota fiscal. Tente de novo, mais perto do QR code.' })
+        return
+      }
+      const dup = all?.find((x) => x.invoiceKey === sc.info.chave && x.id !== e?.id)
+      if (dup) {
+        setLookup({ state: 'erro', msg: `Essa nota já foi lançada em ${dup.date.split('-').reverse().join('/')} (${brl(dup.amount)}).` })
+        return
+      }
+      setE((cur) => (cur ? { ...cur, invoiceKey: sc.info.chave } : cur))
+      const fill = (f: ReturnType<typeof notaParaDespesa>) => {
+        setE((cur) =>
+          cur
+            ? {
+                ...cur,
+                category: f.category,
+                date: f.date ?? cur.date,
+                supplier: f.supplier ?? cur.supplier,
+                description: f.description ?? cur.description,
+                fuelType: f.fuelType ?? cur.fuelType,
+                invoiceKey: sc.info.chave,
+              }
+            : cur,
+        )
+        if (f.amount) setAmount(num(f.amount, 2))
+        if (f.liters) setLiters(num(f.liters, 3).replace(/0+$/, '').replace(/,$/, ''))
+        if (f.pricePerLiter) setPrice(num(f.pricePerLiter, 3))
+      }
+
+      if (sc.qr && sc.info.modelo === '65') {
+        setLookup({ state: 'buscando', msg: 'Buscando a nota na SEFAZ…' })
+        try {
+          const nota = await consultarNota(sc.qr)
+          const f = notaParaDespesa(nota, e?.category ?? 'combustivel')
+          fill(f)
+          setLookup({
+            state: 'ok',
+            msg: `Nota de ${nota.emitente ?? 'estabelecimento'}${nota.data ? `, ${nota.data.split('-').reverse().join('/')}` : ''}. Confira os dados, informe o hodômetro e salve.`,
+            aviso: f.aviso,
+            url: nota.url,
+          })
+          return
+        } catch (err) {
+          const nome = await nomePorCnpj(sc.info.cnpj)
+          const dia = sc.offline?.dia
+          fill({
+            category: e?.category ?? 'combustivel',
+            supplier: nome,
+            amount: sc.offline?.total,
+            date: dia ? `${sc.info.ano}-${String(sc.info.mes).padStart(2, '0')}-${String(dia).padStart(2, '0')}` : undefined,
+          })
+          setLookup({
+            state: 'parcial',
+            msg: `Não consegui buscar os detalhes na SEFAZ (${(err as Error).message}). Preenchi o que a nota informa${nome ? `: ${nome}` : ''}. Complete o valor e os litros.`,
+            url: /^https?:/i.test(sc.raw) ? sc.raw : undefined,
+          })
+          return
+        }
+      }
+      // NF-e (código de barras do DANFE): a SEFAZ não libera os itens sem certificado digital
+      const nome = await nomePorCnpj(sc.info.cnpj)
+      fill({ category: e?.category ?? 'manutencao', supplier: nome })
+      setLookup({
+        state: 'parcial',
+        msg: `Nota fiscal eletrônica (NF-e) nº ${sc.info.numero}${nome ? ` de ${nome}` : ''}. Nesse tipo de nota a SEFAZ só libera os itens com certificado digital, então preencha o valor e a data.`,
+      })
+    },
+    [all, e?.id, e?.category],
+  )
 
   if (!vehicles || !e) return null
   if (vehicles.length === 0)
@@ -118,7 +197,30 @@ export default function ExpenseForm() {
   return (
     <form onSubmit={submit}>
       <PageHeader title={id ? 'Editar despesa' : 'Nova despesa'} />
+      {scanning && (
+        <Scanner
+          title="Ler nota fiscal"
+          hint="Aponte para o QR code da nota (cupom) ou para o código de barras da NF-e."
+          onResult={onScan}
+          onClose={() => setScanning(false)}
+        />
+      )}
       <div className="card form">
+        <button type="button" className="btn block scanmain" onClick={() => { setLookup(null); setScanning(true) }}>
+          📷 Ler QR code da nota fiscal
+        </button>
+        {lookup && (
+          <div className={'notabox' + (lookup.state === 'ok' || lookup.state === 'buscando' ? '' : ' warn')}>
+            <span>{lookup.state === 'buscando' ? '🔄 ' : lookup.state === 'ok' ? '✅ ' : '⚠️ '}{lookup.msg}</span>
+            {lookup.aviso && <span className="small">{lookup.aviso}</span>}
+            {lookup.url && (
+              <a className="small" href={lookup.url} target="_blank" rel="noreferrer" style={{ textDecoration: 'underline' }}>
+                Ver a nota no site da SEFAZ
+              </a>
+            )}
+          </div>
+        )}
+        {e.invoiceKey && !lookup && <div className="muted small">🧾 Despesa ligada a uma nota fiscal</div>}
         <div className="catgrid">
           {CATEGORIES.map((c) => (
             <button

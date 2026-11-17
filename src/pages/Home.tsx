@@ -57,7 +57,10 @@ export default function Home() {
         <div className="muted small">
           Mês anterior: {brl(prevMonth)} · No ano: {brl(year)}
         </div>
-        <Link className="btn primary big" to="/despesas/nova">+ Lançar despesa</Link>
+        <div className="actions left">
+          <Link className="btn primary big" to="/despesas/nova">+ Lançar despesa</Link>
+          <Link className="btn big" to="/despesas/nova?scan=1">📷 Ler nota</Link>
+        </div>
       </div>
 
       {(() => {
