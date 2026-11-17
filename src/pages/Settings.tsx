@@ -2,6 +2,7 @@ import { useRef, useState } from 'react'
 import { PageHeader } from '../components/Field'
 import { db } from '../lib/db'
 import { today } from '../lib/format'
+import Account from '../components/Account'
 
 export default function Settings() {
   const file = useRef<HTMLInputElement>(null)
@@ -29,9 +30,10 @@ export default function Settings() {
       const data = JSON.parse(await f.text())
       if (data.app !== 'controle-veiculos') throw new Error()
       await db.transaction('rw', db.vehicles, db.drivers, db.expenses, async () => {
-        await db.vehicles.bulkPut(data.vehicles ?? [])
-        await db.drivers.bulkPut(data.drivers ?? [])
-        await db.expenses.bulkPut(data.expenses ?? [])
+        const pend = <T,>(rows: T[] = []) => rows.map((r) => ({ ...r, synced: 0 as const }))
+        await db.vehicles.bulkPut(pend(data.vehicles))
+        await db.drivers.bulkPut(pend(data.drivers))
+        await db.expenses.bulkPut(pend(data.expenses))
       })
       setMsg(`Backup restaurado: ${data.vehicles?.length ?? 0} veículos, ${data.expenses?.length ?? 0} despesas.`)
     } catch {
@@ -43,11 +45,8 @@ export default function Settings() {
     <>
       <PageHeader title="Ajustes" />
       <div className="card form">
-        <h3>☁️ Sincronização</h3>
-        <p className="muted">
-          Em breve: entre com sua conta para ver os mesmos dados no celular e no computador. Por enquanto, os
-          dados ficam salvos neste aparelho.
-        </p>
+        <h3>☁️ Conta e sincronização</h3>
+        <Account />
       </div>
       <div className="card form">
         <h3>💾 Cópia de segurança</h3>

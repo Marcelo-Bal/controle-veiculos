@@ -3,15 +3,25 @@ import { Link } from 'react-router-dom'
 import { Empty } from '../components/Field'
 import { useExpenses, useVehicles } from '../lib/hooks'
 import { brl, catInfo, dateBR, today } from '../lib/format'
+import { useSync } from '../lib/sync'
 
 export default function Home() {
   const vehicles = useVehicles()
   const expenses = useExpenses()
+  const sync = useSync()
   if (!vehicles || !expenses) return null
+  const banner =
+    sync.ready && !sync.family ? (
+      <Link to="/ajustes" className="banner">
+        <span>☁️ Entre na sua conta para usar os mesmos dados no celular e no computador.</span>
+        <b>Entrar ›</b>
+      </Link>
+    ) : null
 
   if (vehicles.length === 0)
     return (
       <div className="welcome">
+        {banner}
         <h1>Bem-vindo! 👋</h1>
         <p>Aqui você controla os gastos, o consumo e as manutenções dos veículos da família.</p>
         <ol className="steps">
@@ -37,6 +47,7 @@ export default function Home() {
 
   return (
     <>
+      {banner}
       <div className="hero">
         <div className="muted">Gasto em {monthName}</div>
         <div className="heroval">{brl(thisMonth)}</div>

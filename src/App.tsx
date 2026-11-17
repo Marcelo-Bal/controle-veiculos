@@ -7,6 +7,7 @@ import DriverForm from './pages/DriverForm'
 import Expenses from './pages/Expenses'
 import ExpenseForm from './pages/ExpenseForm'
 import Settings from './pages/Settings'
+import { useSync } from './lib/sync'
 
 const NAV = [
   { to: '/', label: 'Início', icon: '🏠', end: true },
@@ -18,6 +19,16 @@ const NAV = [
 
 export default function App() {
   const nav = useNavigate()
+  const sync = useSync()
+  const syncLabel = !sync.family
+    ? '☁️ Sem sincronização'
+    : sync.status === 'sincronizando'
+      ? '🔄 Sincronizando…'
+      : sync.status === 'offline'
+        ? '📴 Offline'
+        : sync.status === 'erro'
+          ? '⚠️ Erro ao sincronizar'
+          : '✅ Sincronizado'
   return (
     <div className="shell">
       <aside className="sidebar">
@@ -31,6 +42,8 @@ export default function App() {
         <button className="btn primary block" onClick={() => nav('/despesas/nova')}>
           + Nova despesa
         </button>
+        <span className="grow" />
+        <NavLink to="/ajustes" className="syncdot">{syncLabel}</NavLink>
       </aside>
       <main className="content">
         <Routes>
