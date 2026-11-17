@@ -5,6 +5,8 @@ import { db, newBase, remove, save, type Reminder, type Vehicle } from '../lib/d
 import { FUELS, dateBR, num, parseNum, today } from '../lib/format'
 import { REMINDER_PRESETS, currentOdometer, reminderDue } from '../lib/stats'
 import { useExpenses } from '../lib/hooks'
+import DocImport from '../components/DocImport'
+import { parseCrlv } from '../lib/docread'
 
 const blank = (): Vehicle => ({ ...newBase(), name: '', brand: '', model: '', plate: '', fuel: 'flex' })
 
@@ -15,6 +17,7 @@ export default function VehicleForm() {
   const [odo, setOdo] = useState('')
   const [tank, setTank] = useState('')
   const expenses = useExpenses()
+  const [docMsg, setDocMsg] = useState<{ ok: boolean; text: string } | null>(null)
 
   useEffect(() => {
     if (id)
@@ -32,6 +35,26 @@ export default function VehicleForm() {
   const reminders = v.reminders ?? []
   const setRem = (id: string, patch: Partial<Reminder>) =>
     set('reminders', reminders.map((r) => (r.id === id ? { ...r, ...patch } : r)))
+  const fromCrlv = (text: string) => {
+    const d = parseCrlv(text)
+    const found: string[] = []
+    const next = { ...v }
+    if (d.plate) { next.plate = d.plate; found.push('placa') }
+    if (d.renavam) { next.renavam = d.renavam; found.push('Renavam') }
+    if (d.chassis) { next.chassis = d.chassis; found.push('chassi') }
+    if (d.brand) { next.brand = d.brand; found.push('marca') }
+    if (d.model) { next.model = d.model; found.push('modelo') }
+    if (d.year) { next.year = d.year; found.push('ano') }
+    if (d.color) { next.color = d.color; found.push('cor') }
+    if (d.fuel) { next.fuel = d.fuel; found.push('combustível') }
+    if (!next.name && d.brand && d.model) next.name = `${d.model.split(' ')[0][0]}${d.model.split(' ')[0].slice(1).toLowerCase()}`
+    setV(next)
+    setDocMsg(
+      found.length
+        ? { ok: true, text: `Preenchido pelo documento: ${found.join(', ')}. Confira se está tudo certo antes de salvar.` }
+        : { ok: false, text: 'Não reconheci os dados do CRLV nessa imagem. Tente uma foto mais próxima, reta e bem iluminada, ou o PDF do CRLV digital.' },
+    )
+  }
   const addRem = (p: Omit<Reminder, 'id'>) =>
     set('reminders', [...reminders, { id: crypto.randomUUID(), lastKm: odoNow || undefined, lastDate: today(), ...p }])
 
@@ -62,6 +85,12 @@ export default function VehicleForm() {
     <form onSubmit={submit}>
       <PageHeader title={id ? 'Editar veículo' : 'Novo veículo'} />
       <div className="card form">
+        <DocImport
+          label="📄 Preencher pelo documento (CRLV)"
+          help="Tire uma foto do CRLV ou escolha o PDF do CRLV digital (app Carteira Digital de Trânsito). A leitura é feita no seu aparelho."
+          onText={fromCrlv}
+        />
+        {docMsg && <div className={'notabox' + (docMsg.ok ? '' : ' warn')}>{docMsg.ok ? '✅ ' : '⚠️ '}{docMsg.text}</div>}
         <Field label="Apelido *" hint="Como a família chama o carro. Ex.: Onix da Ana">
           <input required value={v.name} onChange={(e) => set('name', e.target.value)} autoFocus={!id} />
         </Field>

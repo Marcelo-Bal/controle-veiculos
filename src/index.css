@@ -209,3 +209,8 @@ input[type='date'] { -webkit-appearance: none; appearance: none; }
 .notabox { background: var(--primary-soft); border-radius: 10px; padding: 12px 14px; display: flex; flex-direction: column; gap: 4px; }
 .notabox.warn { background: #fff4e0; color: #6b4500; }
 @media (prefers-color-scheme: dark) { .notabox.warn { background: #3a2a10; color: #f3d9a6; } }
+.docimport { border: 1px dashed var(--primary); background: var(--primary-soft); border-radius: 12px; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; }
+.docimport p { margin: 0; }
+.small-title { font-size: .95rem; }
+.filled { animation: filled 1.6s ease-out; }
+@keyframes filled { 0% { box-shadow: 0 0 0 3px #f5c542; } 100% { box-shadow: 0 0 0 0 transparent; } }
