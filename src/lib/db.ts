@@ -11,6 +11,15 @@ export interface Base {
 
 export type Fuel = 'gasolina' | 'etanol' | 'diesel' | 'gnv' | 'eletrico' | 'flex'
 
+export interface Reminder {
+  id: string
+  title: string // ex.: Troca de óleo
+  everyKm?: number
+  everyMonths?: number
+  lastKm?: number
+  lastDate?: string // AAAA-MM-DD
+}
+
 export interface Vehicle extends Base {
   name: string // apelido, ex.: "Carro da Ana"
   brand: string
@@ -24,6 +33,7 @@ export interface Vehicle extends Base {
   tankLiters?: number
   initialOdometer?: number
   notes?: string
+  reminders?: Reminder[]
 }
 
 export interface Driver extends Base {

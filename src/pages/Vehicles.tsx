@@ -9,7 +9,15 @@ export default function Vehicles() {
   if (!vehicles) return null
   return (
     <>
-      <PageHeader title="Veículos" action={<Link className="btn primary" to="/veiculos/novo">+ Novo</Link>} />
+      <PageHeader
+        title="Veículos"
+        action={
+          <div className="actions">
+            <Link className="btn" to="/condutores">🪪 Condutores</Link>
+            <Link className="btn primary" to="/veiculos/novo">+ Novo</Link>
+          </div>
+        }
+      />
       {vehicles.length === 0 ? (
         <Empty
           icon="🚗"

@@ -1,7 +1,9 @@
 import type { Expense } from '../lib/db'
 import { Link } from 'react-router-dom'
 import { Empty } from '../components/Field'
-import { useExpenses, useVehicles } from '../lib/hooks'
+import { useDrivers, useExpenses, useVehicles } from '../lib/hooks'
+import { alerts, currentOdometer } from '../lib/stats'
+import { save } from '../lib/db'
 import { brl, catInfo, dateBR, today } from '../lib/format'
 import { useSync } from '../lib/sync'
 
@@ -9,6 +11,7 @@ export default function Home() {
   const vehicles = useVehicles()
   const expenses = useExpenses()
   const sync = useSync()
+  const drivers = useDrivers()
   if (!vehicles || !expenses) return null
   const banner =
     sync.ready && !sync.family ? (
@@ -56,6 +59,38 @@ export default function Home() {
         </div>
         <Link className="btn primary big" to="/despesas/nova">+ Lançar despesa</Link>
       </div>
+
+      {(() => {
+        const list = alerts(vehicles, drivers ?? [], expenses)
+        if (!list.length) return null
+        const done = async (vehicleId: string, reminderId: string) => {
+          const v = vehicles.find((x) => x.id === vehicleId)!
+          const odo = currentOdometer(expenses, v)
+          await save('vehicles', {
+            ...v,
+            reminders: (v.reminders ?? []).map((r) => (r.id === reminderId ? { ...r, lastKm: odo || r.lastKm, lastDate: today() } : r)),
+          })
+        }
+        return (
+          <>
+            <h2>🔔 Avisos</h2>
+            <div className="card list">
+              {list.map((a) => (
+                <div key={a.key} className="alert">
+                  <span className={'badge ' + (a.level === 'vencido' ? 'red' : 'amber')}>{a.level === 'vencido' ? 'Vencido' : 'Em breve'}</span>
+                  <div className="grow">
+                    <div className="itemtitle">{a.title}</div>
+                    <div className="muted">{a.detail}</div>
+                  </div>
+                  {a.reminderId && (
+                    <button className="btn" onClick={() => confirm(`Marcar "${a.title}" como feito hoje?`) && done(a.vehicleId!, a.reminderId!)}>Feito</button>
+                  )}
+                </div>
+              ))}
+            </div>
+          </>
+        )
+      })()}
 
       <h2>Por veículo neste mês</h2>
       <div className="cards">

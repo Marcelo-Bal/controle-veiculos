@@ -7,13 +7,15 @@ import DriverForm from './pages/DriverForm'
 import Expenses from './pages/Expenses'
 import ExpenseForm from './pages/ExpenseForm'
 import Settings from './pages/Settings'
+import Reports from './pages/Reports'
 import { useSync } from './lib/sync'
 
 const NAV = [
   { to: '/', label: 'Início', icon: '🏠', end: true },
   { to: '/despesas', label: 'Despesas', icon: '💰' },
+  { to: '/relatorios', label: 'Relatórios', icon: '📊' },
   { to: '/veiculos', label: 'Veículos', icon: '🚗' },
-  { to: '/condutores', label: 'Condutores', icon: '🪪' },
+  { to: '/condutores', label: 'Condutores', icon: '🪪', desktopOnly: true },
   { to: '/ajustes', label: 'Ajustes', icon: '⚙️' },
 ]
 
@@ -58,10 +60,11 @@ export default function App() {
           <Route path="/condutores/novo" element={<DriverForm />} />
           <Route path="/condutores/:id" element={<DriverForm />} />
           <Route path="/ajustes" element={<Settings />} />
+          <Route path="/relatorios" element={<Reports />} />
         </Routes>
       </main>
       <nav className="tabbar">
-        {NAV.map((n) => (
+        {NAV.filter((n) => !n.desktopOnly).map((n) => (
           <NavLink key={n.to} to={n.to} end={n.end} className="tab">
             <span className="tabicon">{n.icon}</span>
             <span>{n.label}</span>

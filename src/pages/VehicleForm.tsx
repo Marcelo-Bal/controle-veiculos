@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { Field, PageHeader } from '../components/Field'
-import { db, newBase, remove, save, type Vehicle } from '../lib/db'
-import { FUELS, parseNum } from '../lib/format'
+import { db, newBase, remove, save, type Reminder, type Vehicle } from '../lib/db'
+import { FUELS, dateBR, num, parseNum, today } from '../lib/format'
+import { REMINDER_PRESETS, currentOdometer, reminderDue } from '../lib/stats'
+import { useExpenses } from '../lib/hooks'
 
 const blank = (): Vehicle => ({ ...newBase(), name: '', brand: '', model: '', plate: '', fuel: 'flex' })
 
@@ -12,6 +14,7 @@ export default function VehicleForm() {
   const [v, setV] = useState<Vehicle | null>(id ? null : blank())
   const [odo, setOdo] = useState('')
   const [tank, setTank] = useState('')
+  const expenses = useExpenses()
 
   useEffect(() => {
     if (id)
@@ -25,6 +28,12 @@ export default function VehicleForm() {
 
   if (!v) return null
   const set = <K extends keyof Vehicle>(k: K, val: Vehicle[K]) => setV({ ...v, [k]: val })
+  const odoNow = Math.max(currentOdometer(expenses ?? [], v), parseNum(odo) ?? 0)
+  const reminders = v.reminders ?? []
+  const setRem = (id: string, patch: Partial<Reminder>) =>
+    set('reminders', reminders.map((r) => (r.id === id ? { ...r, ...patch } : r)))
+  const addRem = (p: Omit<Reminder, 'id'>) =>
+    set('reminders', [...reminders, { id: crypto.randomUUID(), lastKm: odoNow || undefined, lastDate: today(), ...p }])
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -82,9 +91,57 @@ export default function VehicleForm() {
             <input inputMode="decimal" value={tank} onChange={(e) => setTank(e.target.value)} />
           </Field>
         </div>
-        <Field label="Quilometragem atual" hint="Usada como ponto de partida para os cálculos de consumo">
+        <Field label="Quilometragem no cadastro" hint="Ponto de partida dos cálculos. Depois o app usa o hodômetro informado nas despesas.">
           <input inputMode="numeric" value={odo} onChange={(e) => setOdo(e.target.value)} />
         </Field>
+        <div className="form">
+          <div>
+            <h3>🔔 Lembretes de manutenção</h3>
+            <p className="muted small">O app avisa na tela inicial quando estiver chegando a hora, pela quilometragem ou pela data.</p>
+          </div>
+          {reminders.map((r) => {
+            const due = reminderDue(r, odoNow)
+            return (
+              <div key={r.id} className="reminder">
+                <div className="row end">
+                  <Field label="Lembrete">
+                    <input value={r.title} onChange={(e) => setRem(r.id, { title: e.target.value })} />
+                  </Field>
+                  <button type="button" className="btn danger" aria-label="Remover lembrete" onClick={() => set('reminders', reminders.filter((x) => x.id !== r.id))}>✕</button>
+                </div>
+                <div className="row">
+                  <Field label="A cada (km)">
+                    <input inputMode="numeric" value={r.everyKm ?? ''} onChange={(e) => setRem(r.id, { everyKm: parseNum(e.target.value) })} />
+                  </Field>
+                  <Field label="A cada (meses)">
+                    <input inputMode="numeric" value={r.everyMonths ?? ''} onChange={(e) => setRem(r.id, { everyMonths: parseNum(e.target.value) })} />
+                  </Field>
+                </div>
+                <div className="row">
+                  <Field label="Última vez (km)">
+                    <input inputMode="numeric" value={r.lastKm ?? ''} onChange={(e) => setRem(r.id, { lastKm: parseNum(e.target.value) })} />
+                  </Field>
+                  <Field label="Última vez (data)">
+                    <input type="date" value={r.lastDate ?? ''} onChange={(e) => setRem(r.id, { lastDate: e.target.value || undefined })} />
+                  </Field>
+                </div>
+                <div className="muted small">
+                  {due.state === 'sem-dados'
+                    ? 'Informe o intervalo e quando foi feito pela última vez.'
+                    : `Próxima: ${[due.nextKm ? `${num(due.nextKm)} km` : '', due.nextDate ? dateBR(due.nextDate) : ''].filter(Boolean).join(' ou ')}`}
+                  {due.state === 'vencido' && <span className="badge red" style={{ marginLeft: 8 }}>Vencido</span>}
+                  {due.state === 'proximo' && <span className="badge amber" style={{ marginLeft: 8 }}>Em breve</span>}
+                </div>
+              </div>
+            )
+          })}
+          <div className="chips">
+            {REMINDER_PRESETS.filter((p) => !reminders.some((r) => r.title === p.title)).map((p) => (
+              <button type="button" key={p.title} className="chip" onClick={() => addRem(p)}>+ {p.title}</button>
+            ))}
+            <button type="button" className="chip" onClick={() => addRem({ title: 'Novo lembrete' })}>+ Outro</button>
+          </div>
+        </div>
         <details>
           <summary>Mais dados (Renavam, chassi, cor)</summary>
           <div className="row">
